@@ -5,6 +5,7 @@ import math
 import random
 from typing import List, Dict, Any, Optional
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
 class PositionalEncoding(nn.Module):
     """Positional encoding for transformer"""

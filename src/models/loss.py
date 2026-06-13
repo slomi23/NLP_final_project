@@ -41,7 +41,7 @@ class ContrastiveLoss(nn.Module):
 
 class NTXentLoss(nn.Module):
     """
-    Simple working NT-Xent Loss based on SimCLR
+    Corrected NT-Xent Loss based on SimCLR
     """
     
     def __init__(self, temperature: float = 0.07, reduction: str = 'mean'):
@@ -52,47 +52,35 @@ class NTXentLoss(nn.Module):
     def forward(self, projections: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            projections: [2*batch_size, embed_dim] - requires_grad=True
+            projections: [2*batch_size, embed_dim]
                          (first half: view 1, second half: view 2)
         """
-        batch_size = projections.shape[0] // 2
+        batch_size = projections.shape // 2
         
         # Normalize projections
         projections = F.normalize(projections, dim=1)
         
-        # Compute similarity matrix
+        # Compute similarity matrix [2B, 2B]
         similarity_matrix = torch.mm(projections, projections.t()) / self.temperature
         
-        # Create positive pairs mask
-        pos_mask = torch.zeros(projections.shape[0], projections.shape[0], 
-                              device=projections.device, dtype=torch.bool)
-        for i in range(batch_size):
-            pos_mask[i, i + batch_size] = True
-            pos_mask[i + batch_size, i] = True
+        # Create labels for positive pairs
+        # For view 1 (indices 0 to B-1), the positive is view 2 (indices B to 2B-1)
+        # For view 2 (indices B to 2B-1), the positive is view 1 (indices 0 to B-1)
+        labels = torch.cat([torch.arange(batch_size, batch_size * 2, device=projections.device),
+                            torch.arange(0, batch_size, device=projections.device)])
         
-        # Remove self-similarity
-        identity_mask = torch.eye(projections.shape[0], dtype=torch.bool, 
-                                 device=projections.device)
-        pos_mask = pos_mask & ~identity_mask
-        
-        # Get positive similarities
-        pos_sim = similarity_matrix[pos_mask]
-        
-        # Get all similarities for denominator
-        all_sim = similarity_matrix[~identity_mask]
-        
-        # InfoNCE loss
-        exp_all = torch.exp(all_sim)
-        sum_exp = exp_all.sum()
-        
-        loss = -torch.log(torch.exp(pos_sim).sum() / (sum_exp + 1e-8) + 1e-8)
+        # Compute InfoNCE loss using cross_entropy
+        # cross_entropy expects logits [N, C] and targets [N]
+        # Here, N = 2B, C = 2B
+        loss = F.cross_entropy(similarity_matrix, labels)
         
         if self.reduction == 'mean':
             return loss
         elif self.reduction == 'sum':
-            return loss
+            return loss * batch_size * 2 # Approximation for sum
         else:
             return loss
+
 
 class InfoNCELoss(nn.Module):
     """
