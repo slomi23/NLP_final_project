@@ -1,3 +1,5 @@
+# src/data/download_ms_marco.py
+
 import os
 import urllib.request
 import tarfile
@@ -12,14 +14,14 @@ def ensure_data_directory():
     return processed_dir
 
 def create_synthetic_ms_marco_subset(msmarco_dir=None, output_size_mb=100):
-    """Create a small synthetic MS MARCO-like dataset (~100MB)"""
+    """Create a larger synthetic MS MARCO-like dataset (~20k pairs)"""
     
-    print(f"Creating synthetic MS MARCO subset (~{output_size_mb}MB)...")
+    print(f"Creating larger synthetic MS MARCO subset...")
     
     # Ensure data directory exists
     processed_dir = ensure_data_directory()
     
-    # Create a smaller collection of synthetic passages
+    # Create a larger collection of synthetic passages
     synthetic_passages = []
     synthetic_queries = []
     synthetic_qrels = {}
@@ -29,11 +31,15 @@ def create_synthetic_ms_marco_subset(msmarco_dir=None, output_size_mb=100):
         "machine learning", "natural language processing", "computer vision",
         "deep learning", "neural networks", "artificial intelligence",
         "data science", "python programming", "algorithm design",
-        "statistical analysis", "web development", "database systems"
+        "statistical analysis", "web development", "database systems",
+        "cloud computing", "cybersecurity", "blockchain technology",
+        "quantum computing", "robotics", "bioinformatics", "digital signal processing"
     ]
     
-    # Generate synthetic passages
-    for i in range(5000):  # ~5K passages for ~100MB
+    # Generate 10,000 synthetic passages
+    num_passages = 10000
+    print(f"  Generating {num_passages} passages...")
+    for i in range(num_passages):
         topic = random.choice(topics)
         
         # Create realistic passage content
@@ -57,15 +63,22 @@ def create_synthetic_ms_marco_subset(msmarco_dir=None, output_size_mb=100):
             'topic': topic
         })
     
-    # Generate synthetic queries
-    for i in range(1000):  # ~1K queries
+    # Generate 20,000 synthetic queries
+    num_queries = 20000
+    print(f"  Generating {num_queries} queries...")
+    for i in range(num_queries):
         topic = random.choice(topics)
         query_types = [
             f"What is {topic} and how does it work?",
             f"Applications of {topic} in modern systems",
             f"Latest advances in {topic} research",
             f"Best practices for implementing {topic} solutions",
-            f"Challenges in {topic} development and deployment"
+            f"Challenges in {topic} development and deployment",
+            f"How to learn {topic} effectively?",
+            f"{topic} vs traditional methods: a comparison",
+            f"The future of {topic} in industry",
+            f"Key concepts in {topic} explained",
+            f"Top tools for {topic} development"
         ]
         query = random.choice(query_types)
         
@@ -76,6 +89,7 @@ def create_synthetic_ms_marco_subset(msmarco_dir=None, output_size_mb=100):
         })
     
     # Generate synthetic relevance judgments
+    print(f"  Generating relevance judgments...")
     for query in synthetic_queries:
         query_id = query['id']
         topic = query['topic']
@@ -209,7 +223,7 @@ def main():
     """Main function to download/create small MS MARCO dataset"""
     
     print("=== Small MS MARCO Dataset Downloader ===")
-    print("This script creates a ~100MB dataset perfect for NLP projects")
+    print("This script creates a dataset perfect for NLP projects")
     print("Files will be saved to: data/processed/")
     print()
     
