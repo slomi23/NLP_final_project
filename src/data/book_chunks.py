@@ -1,7 +1,6 @@
 import json
 import re
 from pathlib import Path
-
 from pypdf import PdfReader
 
 BOOK_PATH = Path("data/raw/Speech_and_Language_Processing.pdf")
@@ -11,41 +10,42 @@ MIN_WORDS = 200
 TARGET_WORDS = 250
 MAX_WORDS = 300
 
-
 def extract_text_from_pdf(pdf_path):
     reader = PdfReader(pdf_path)
-
     pages = []
-
     for page in reader.pages:
         text = page.extract_text()
         if text:
             pages.append(text)
-
     return "\n\n".join(pages)
 
-
 def clean_text(text):
+    # 1. Remove Penn Treebank tags (e.g., /BE, /BI, /BG, /CAT, /LEX)
+    # This regex matches any sequence starting with / followed by non-whitespace characters
+    text = re.sub(r'/\S+', '', text)
+    
+    # 2. Clean up whitespace
     text = text.replace("\r\n", "\n")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    # 3. Remove empty lines or lines with only whitespace
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    text = '\n'.join(lines)
+    
     return text.strip()
-
 
 def split_into_paragraphs(text):
     paragraphs = []
-    for p in re.split(r"\n\s*\n", text):
+    for p in re.split(r'\n\s*\n', text):
         p = p.strip()
-
         if not p:
             continue
         word_count = len(p.split())
-
         if word_count < 15:
             continue
         paragraphs.append(p)
     return paragraphs
-
 
 def build_chunks(paragraphs):
     chunks = []
@@ -79,7 +79,6 @@ def build_chunks(paragraphs):
                 })
                 chunk_id += 1
                 start = end
-
             continue
 
         if current_word_count + paragraph_words > MAX_WORDS:
@@ -93,11 +92,9 @@ def build_chunks(paragraphs):
                 chunk_id += 1
                 current_paragraphs = [paragraph]
                 current_word_count = paragraph_words
-
             else:
                 current_paragraphs.append(paragraph)
                 current_word_count += paragraph_words
-
         else:
             current_paragraphs.append(paragraph)
             current_word_count += paragraph_words
@@ -111,7 +108,6 @@ def build_chunks(paragraphs):
         })
 
     return chunks
-
 
 def save_chunks(chunks, output_path):
     output_path.parent.mkdir(parents=True, exist_ok=True)
