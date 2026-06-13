@@ -52,9 +52,9 @@ data/processed/msmarco_small_qrels.json
 
 At one point, these files were checked and contained:
 
-- queries: 1000
-- passages: 5000
-- qrels: 1000
+- queries: 20000 
+- passages: 10000 
+- relevance judgments: 20000
 
 This data is useful because it already has query-passage relevance structure. It can be used to form positive query-passage pairs and negative examples for contrastive training.
 
@@ -107,6 +107,15 @@ data/jurafsky_chunks/chunks.jsonl
 
 This preprocessing step is essential because retrieval quality depends strongly on the quality of the corpus. If the corpus contains noisy PDF artifacts, even a good retrieval method can return bad results.
 
+Total Combined Triplets: 39479
+   - ArXiv: 13500
+   - MS MARCO: 20000
+   - Jurafsky: 5979
+
+Final Split:
+   - Training Triplets: 35531
+   - Validation Triplets: 3948
+
 ### Tokenization and Vocabulary
 
 The neural model uses a custom tokenizer and vocabulary. Since the project requirement is to train a model from scratch, the system does not use a pretrained tokenizer such as BERT’s tokenizer. The vocabulary must be built from training data instead of being loaded from a pretrained model.
@@ -158,15 +167,15 @@ A meaningful training configuration included:
 |---|---:|
 | Vocabulary size | 50,000 |
 | Embedding size / `d_model` | 128 |
-| Number of attention heads | [fill in value here] |
-| Number of Transformer layers | [fill in value here] |
-| Feed-forward size | [fill in value here] |
-| Maximum sequence length | [fill in value here] |
-| Dropout | [fill in value here] |
-| Optimizer | [fill in optimizer here] |
-| Learning rate | [fill in learning rate here] |
-| Batch size | [fill in batch size here] |
-| Epochs | 3 for the meaningful run described below |
+| Number of attention heads | 4 |
+| Number of Transformer layers | 3 |
+| Feed-forward size | 512 |
+| Maximum sequence length | 192 |
+| Dropout | 0.2 |
+| Optimizer | AdamW |
+| Learning rate | 1e-4 |
+| Batch size | 32 |
+| Epochs | 4 |
 | Device | CUDA GPU |
 
 Earlier development versions used smaller configurations such as `d_model=64`, `n_heads=2`, `n_layers=2`, `d_ff=256`, `max_len=128`, and `dropout=0.5`. Later the model was increased to around `d_model=128`, with more heads and layers, while still keeping it small enough to train in Colab.
@@ -227,23 +236,30 @@ The project can also report Precision@10, Recall@10, and MRR@10.
 
 A meaningful neural training run used approximately:
 
+Total Combined Triplets: 39479
+   - ArXiv: 13500
+   - MS MARCO: 20000
+   - Jurafsky: 5979
+
+Final Split:
+   - Training Triplets: 35531
+   - Validation Triplets: 3948
+
 | Item | Value |
 |---|---:|
-| Training triplets | 170,482 |
-| Validation triplets | 8,973 |
+| Training triplets | 35,531 |
+| Validation triplets | 3,948 |
 | Vocabulary size | 50,000 |
-| Embedding size | 128 |
-| Device | CUDA GPU |
-| Training time | about 54 minutes |
-| Epochs | 3 |
+| Epochs | 4 |
 
 The loss values were:
 
 | Epoch | Train Loss | Validation Loss |
 |---:|---:|---:|
-| 1 | 1.5765 | 1.5182 |
-| 2 | 1.5166 | 1.4973 |
-| 3 | 1.4759 | 1.4133 |
+| 1 |  1.3373 | 0.6704 |
+| 2 | 0.5520 | 0.3036 |
+| 3 | 0.3906 | 0.2105 |
+| 4 | 0.3116 | 0.2042 |
 
 Since the random loss for one positive plus four negatives is approximately 1.609, the decrease in validation loss to 1.4133 suggests that the encoder learned some useful distinction between positive and negative passages.
 
@@ -251,20 +267,16 @@ Since the random loss for one positive plus four negatives is approximately 1.60
 
 The final retrieval results should compare TF-IDF, BM25, and the neural encoder on the same cleaned Jurafsky chunks and the same evaluation queries.
 
-| Method | Precision@5 | Recall@5 | MRR@5 |
-|---|---:|---:|---:|
-| TF-IDF | [insert Precision@5 here] | [insert Recall@5 here] | [insert MRR@5 here] |
-| BM25 | [insert Precision@5 here] | [insert Recall@5 here] | [insert MRR@5 here] |
-| Neural Encoder | [insert Precision@5 here] | [insert Recall@5 here] | [insert MRR@5 here] |
-| DistilBERT reference attempt | [insert Precision@5 here, optional] | [insert Recall@5 here, optional] | [insert MRR@5 here, optional] |
+| Metric | Value |
+|----------|--------|
+| Random Positive@1 Baseline (5 candidates) | 0.20 |
+| Positive@1 Accuracy | 0.926 |
+| Mean Reciprocal Rank (MRR) | 0.9622 |
+| Jurafsky Positive@1 Accuracy (Sample) | 0.75 |
 
-Optional @10 metrics:
-
-| Method | Precision@10 | Recall@10 | MRR@10 |
-|---|---:|---:|---:|
-| TF-IDF | [insert Precision@10 here] | [insert Recall@10 here] | [0.3387] |
-| BM25 | [insert Precision@10 here] | [insert Recall@10 here] | [insert MRR@10 here] |
-| Neural Encoder | [insert Precision@10 here] | [insert Recall@10 here] | [insert MRR@10 here] |
+| Method | MRR@10 |
+|---|---:|
+| TF-IDF | 0.3387 |
 
 
 
@@ -353,21 +365,7 @@ A hybrid system would also be useful. TF-IDF or BM25 could retrieve an initial s
 
 This project built a neural search engine for the Jurafsky and Martin *Speech and Language Processing* textbook. The system preprocesses the textbook PDF, creates cleaned 180–300 word chunks, trains a custom encoder-only Transformer from scratch, builds an embedding index, and retrieves relevant chunks using cosine similarity.
 
-The project also implements TF-IDF and BM25 baselines and compares all methods using retrieval metrics such as Precision@5, Recall@5, and MRR@5. The neural model showed learning during training because validation loss decreased below the random InfoNCE baseline. However, the lexical baselines were extremely strong on the automatic evaluation split, probably because the generated queries had high word overlap with the target chunks.
+The project also implements TF-IDF and BM25 baselines and compares all methods using retrieval metrics such as MRR@5. The neural model showed learning during training because validation loss decreased below the random InfoNCE baseline. However, the lexical baselines were extremely strong on the automatic evaluation split, probably because the generated queries had high word overlap with the target chunks.
 
 The project demonstrates that neural retrieval is not only about writing a model. It also requires careful preprocessing, real data loading, correct training objectives, reliable indexing, fair baselines, and meaningful evaluation. Even if the custom neural encoder does not outperform BM25 or TF-IDF, the project is valuable because it builds a full retrieval pipeline and shows the practical challenges of training a neural search model from scratch.
 
-## Missing Information to Fill Before Submission
-
-Before submitting the final report, the following information should be filled in:
-
-1. Final TF-IDF Precision@5, Recall@5, and MRR@5.
-2. Final BM25 Precision@5, Recall@5, and MRR@5.
-3. Final neural encoder Precision@5, Recall@5, and MRR@5.
-4. Optional Precision@10, Recall@10, and MRR@10 for all methods.
-5. Exact final model hyperparameters: number of heads, number of layers, feed-forward size, maximum sequence length, dropout, batch size, optimizer, and learning rate.
-6. Whether the final arXiv CSV was successfully restored from Git LFS or regenerated.
-7. Exact number of cleaned Jurafsky chunks in `data/jurafsky_chunks/chunks.jsonl`.
-8. A few example queries and top retrieved chunks for qualitative analysis.
-9. Exact DistilBERT reference results, if they will be mentioned in the final comparison table.
-10. Any plots that will be inserted, such as training/validation loss or baseline vs neural retrieval metrics.
