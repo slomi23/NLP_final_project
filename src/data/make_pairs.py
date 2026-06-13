@@ -17,7 +17,6 @@ OUT_TEST  = DATA_DIR / "test_pairs.jsonl"
 TRAIN_RATIO = 0.80
 VAL_RATIO   = 0.10
 
-
 def load_json(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -82,7 +81,6 @@ def main():
     write_jsonl(val,   OUT_VAL)
     write_jsonl(test,  OUT_TEST)
     print("Done")
-
 
 if __name__ == "__main__":
     main()

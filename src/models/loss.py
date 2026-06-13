@@ -1,5 +1,3 @@
-"""Loss functions for neural search / contrastive learning."""
-
 from __future__ import annotations
 
 import torch
@@ -8,11 +6,6 @@ import torch.nn.functional as F
 
 
 class ContrastiveLoss(nn.Module):
-    """Classic pairwise contrastive loss.
-
-    labels: 1 for similar pairs, 0 for dissimilar pairs.
-    """
-
     def __init__(self, margin: float = 1.0, reduction: str = "mean"):
         super().__init__()
         self.margin = margin
@@ -39,12 +32,6 @@ class ContrastiveLoss(nn.Module):
 
 
 class NTXentLoss(nn.Module):
-    """SimCLR NT-Xent loss.
-
-    projections shape: [2 * batch_size, embed_dim]
-    First half and second half are positive views of each other.
-    """
-
     def __init__(self, temperature: float = 0.07, reduction: str = "mean"):
         super().__init__()
         self.temperature = temperature
@@ -54,13 +41,9 @@ class NTXentLoss(nn.Module):
         n = projections.shape[0]
         if n % 2 != 0:
             raise ValueError("NTXentLoss expects an even number of projections: [2 * batch_size, dim]")
-
         batch_size = n // 2
         projections = F.normalize(projections, dim=1)
-
         logits = torch.matmul(projections, projections.T) / self.temperature
-
-        # Remove self-comparisons from denominator.
         self_mask = torch.eye(n, dtype=torch.bool, device=projections.device)
         logits = logits.masked_fill(self_mask, torch.finfo(logits.dtype).min)
 
@@ -76,13 +59,6 @@ class NTXentLoss(nn.Module):
 
 
 class InfoNCELoss(nn.Module):
-    """InfoNCE loss for query-positive-negatives training.
-
-    anchor:    [batch_size, embed_dim]
-    positive:  [batch_size, embed_dim]
-    negatives: [batch_size, num_negatives, embed_dim]
-    """
-
     def __init__(self, temperature: float = 0.07, reduction: str = "mean"):
         super().__init__()
         self.temperature = temperature
@@ -96,7 +72,6 @@ class InfoNCELoss(nn.Module):
     ) -> torch.Tensor:
         if negatives.dim() != 3:
             raise ValueError("negatives must have shape [batch_size, num_negatives, embed_dim]")
-
         batch_size = anchor.shape[0]
         if positive.shape[0] != batch_size or negatives.shape[0] != batch_size:
             raise ValueError("anchor, positive, and negatives must have the same batch size")
@@ -114,12 +89,6 @@ class InfoNCELoss(nn.Module):
 
 
 class SupervisedContrastiveLoss(nn.Module):
-    """Supervised contrastive loss.
-
-    features: [batch_size, embed_dim]
-    labels:   [batch_size]
-    """
-
     def __init__(self, temperature: float = 0.07, reduction: str = "mean"):
         super().__init__()
         self.temperature = temperature
@@ -156,11 +125,6 @@ class SupervisedContrastiveLoss(nn.Module):
 
 
 class LiftedStructureLoss(nn.Module):
-    """Simple lifted-structure style loss.
-
-    This is included for completeness, but your notebook should use InfoNCELoss.
-    """
-
     def __init__(self, margin: float = 1.0, reduction: str = "mean"):
         super().__init__()
         self.margin = margin
@@ -200,9 +164,7 @@ class LiftedStructureLoss(nn.Module):
 
 
 def create_loss(loss_name: str, **kwargs) -> nn.Module:
-    """Factory function for contrastive losses."""
     name = loss_name.lower()
-
     if name in {"contrastive", "contrastive_loss"}:
         kwargs.pop("temperature", None)
         return ContrastiveLoss(**kwargs)
@@ -215,5 +177,4 @@ def create_loss(loss_name: str, **kwargs) -> nn.Module:
     if name in {"lifted_structure", "lifted"}:
         kwargs.pop("temperature", None)
         return LiftedStructureLoss(**kwargs)
-
     raise ValueError(f"Unknown loss function: {loss_name}")

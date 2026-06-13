@@ -1,16 +1,4 @@
-"""Encoder-only Transformer and simple tokenizer for neural search.
-
-This version fixes:
-- padding mask direction in attention
-- positional encoding being added twice
-- search similarity sorting for shape (1, N)
-- clean model save/load config
-- better mean pooling over real tokens instead of blindly using only the first token
-- simple regex tokenizer instead of plain whitespace-only splitting
-"""
-
 from __future__ import annotations
-
 import json
 import math
 import re
@@ -25,26 +13,19 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 class PositionalEncoding(nn.Module):
-    """Sinusoidal positional encoding for batch-first tensors [B, L, D]."""
-
     def __init__(self, d_model: int, max_len: int = 5000):
         super().__init__()
-
         position = torch.arange(max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(
             torch.arange(0, d_model, 2, dtype=torch.float)
             * (-math.log(10000.0) / d_model)
         )
-
         pe = torch.zeros(max_len, d_model)
         pe[:, 0::2] = torch.sin(position * div_term)
-
-        # Handles odd d_model safely.
         if d_model % 2 == 0:
             pe[:, 1::2] = torch.cos(position * div_term)
         else:
             pe[:, 1::2] = torch.cos(position * div_term[:-1])
-
         self.register_buffer("pe", pe.unsqueeze(0))  # [1, max_len, d_model]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -53,12 +34,6 @@ class PositionalEncoding(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    """Multi-head self-attention with a padding mask.
-
-    padding_mask shape: [B, L]
-    padding_mask=True means this token is padding and must be masked out.
-    """
-
     def __init__(self, d_model: int, n_heads: int, dropout: float = 0.1):
         super().__init__()
         if d_model % n_heads != 0:
@@ -91,8 +66,7 @@ class MultiHeadAttention(nn.Module):
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
 
         if padding_mask is not None:
-            # padding_mask=True means padding. Mask keys that are padding.
-            mask = padding_mask.unsqueeze(1).unsqueeze(2)  # [B, 1, 1, L]
+            mask = padding_mask.unsqueeze(1).unsqueeze(2)
             scores = scores.masked_fill(mask, torch.finfo(scores.dtype).min)
 
         attn = F.softmax(scores, dim=-1)
@@ -105,8 +79,6 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    """Position-wise feed-forward network."""
-
     def __init__(self, d_model: int, d_ff: int, dropout: float = 0.1):
         super().__init__()
         self.net = nn.Sequential(
@@ -121,8 +93,6 @@ class FeedForward(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    """Transformer encoder layer using pre-layer normalization."""
-
     def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.1):
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, n_heads, dropout)
@@ -138,8 +108,6 @@ class EncoderLayer(nn.Module):
 
 
 class EncoderOnlyTransformer(nn.Module):
-    """Small encoder-only Transformer for text embeddings."""
-
     def __init__(self, config: Dict[str, Any]):
         super().__init__()
         self.config = dict(config)
@@ -199,10 +167,7 @@ class EncoderOnlyTransformer(nn.Module):
             return input_ids.eq(self.pad_token_id)
 
         if attention_mask.dtype == torch.bool:
-            # Convention used in your training code: True means padding.
             return attention_mask
-
-        # HuggingFace-style mask: 1 real token, 0 padding.
         return attention_mask.eq(0)
 
     def forward(
@@ -213,24 +178,20 @@ class EncoderOnlyTransformer(nn.Module):
         padding_mask = self._make_padding_mask(input_ids, attention_mask)
 
         x = self.token_embedding(input_ids)
-        x = self.position_embedding(x)  # positional encoding added exactly once
+        x = self.position_embedding(x)
         x = self.embedding_dropout(x)
 
         for layer in self.encoder_layers:
             x = layer(x, padding_mask)
 
         x = self.final_norm(x)
-
-        # Mean pooling over real tokens. This is usually better than relying on an
-        # untrained CLS token for a scratch model.
-        real_token_mask = (~padding_mask).unsqueeze(-1).float()  # [B, L, 1]
+        real_token_mask = (~padding_mask).unsqueeze(-1).float()
         lengths = real_token_mask.sum(dim=1).clamp(min=1.0)
         pooled = (x * real_token_mask).sum(dim=1) / lengths
 
         return self.pooling(pooled)
 
     def encode(self, texts: List[str], tokenizer) -> np.ndarray:
-        """Encode texts into numpy embeddings."""
         self.eval()
         device = self.get_device()
 
@@ -243,7 +204,7 @@ class EncoderOnlyTransformer(nn.Module):
                 return_tensors="pt",
             )
             input_ids = encoded["input_ids"].to(device)
-            attention_mask = encoded["attention_mask"].to(device)  # 1 real, 0 pad
+            attention_mask = encoded["attention_mask"].to(device)
             embeddings = self.forward(input_ids, attention_mask)
             return embeddings.detach().cpu().numpy()
 
@@ -302,8 +263,6 @@ class EncoderOnlyTransformer(nn.Module):
 
 
 class SimpleTokenizer:
-    """Simple regex word tokenizer with a HuggingFace-like call interface."""
-
     def __init__(self, vocab_size: int = 20000):
         self.vocab_size = int(vocab_size)
         self.pad_token = "<PAD>"
@@ -410,8 +369,6 @@ class SimpleTokenizer:
     def load(cls, path: str | Path) -> "SimpleTokenizer":
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-
-        # Supports both new format {vocab_size, word_to_id} and old raw word_to_id dict.
         if "word_to_id" in data:
             vocab_size = int(data.get("vocab_size", len(data["word_to_id"])))
             word_to_id = data["word_to_id"]
@@ -425,8 +382,6 @@ class SimpleTokenizer:
         tok.next_id = max(tok.id_to_word.keys(), default=-1) + 1
         return tok
 
-
-# Kept for backward compatibility. Your notebook should use triplet training with InfoNCELoss instead.
 def contrastive_loss(
     embeddings1: torch.Tensor,
     embeddings2: torch.Tensor,
