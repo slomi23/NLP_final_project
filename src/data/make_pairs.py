@@ -81,7 +81,7 @@ def main():
     write_jsonl(train, OUT_TRAIN)
     write_jsonl(val,   OUT_VAL)
     write_jsonl(test,  OUT_TEST)
-    print("Done ✓")
+    print("Done")
 
 
 if __name__ == "__main__":
