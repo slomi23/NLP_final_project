@@ -37,54 +37,40 @@ def load_chunks_from_jsonl(file_path: str) -> list[str]:
 
     return chunks
 
-
-# ---------------------------------------------------------------------------
-# BM25 index  (built once from the corpus)
-# ---------------------------------------------------------------------------
-
 class BM25Index:
-    """Pre-computed BM25 index over a fixed list of document strings."""
-
     def __init__(self, corpus: list[str], k1: float = K1, b: float = B):
         self.k1 = k1
         self.b  = b
         self.corpus = corpus
         N = len(corpus)
-
-        # Tokenise every document
         tokenised = [tokenize(doc) for doc in corpus]
 
-        # Document lengths and average length
         self.doc_lengths = np.array([len(t) for t in tokenised], dtype=np.float32)
         self.avgdl = float(self.doc_lengths.mean())
 
-        # Build vocabulary and document-frequency counts
         df: dict[str, int] = collections.defaultdict(int)
         self.term_freqs: list[dict[str, int]] = []
 
         for tokens in tokenised:
             tf = collections.Counter(tokens)
             self.term_freqs.append(tf)
-            for term in tf:                # each unique term counts once per doc
+            for term in tf:
                 df[term] += 1
 
-        # IDF per term:  log( (N - df + 0.5) / (df + 0.5) + 1 )
         self.idf: dict[str, float] = {
             term: math.log((N - freq + 0.5) / (freq + 0.5) + 1.0)
             for term, freq in df.items()
         }
 
     def get_scores(self, query: str) -> np.ndarray:
-        """Return a BM25 score for every document in the corpus."""
         query_tokens = tokenize(query)
         scores = np.zeros(len(self.corpus), dtype=np.float64)
 
-        for token in set(query_tokens):           # deduplicate query terms
+        for token in set(query_tokens):
             if token not in self.idf:
-                continue                           # OOV term → zero contribution
+                continue
 
             idf_val = self.idf[token]
-            # Vectorised BM25 numerator and denominator across all docs
             tf_vec = np.array(
                 [tf.get(token, 0) for tf in self.term_freqs], dtype=np.float64
             )
@@ -93,13 +79,7 @@ class BM25Index:
 
         return scores
 
-
-# ---------------------------------------------------------------------------
-# Search  (mirrors find_best_chunk from the original)
-# ---------------------------------------------------------------------------
-
 def find_best_chunk(query: str, index: BM25Index) -> tuple[str | None, float]:
-    """Return the single best-matching chunk and its BM25 score."""
     if not index.corpus:
         return None, 0.0
 
@@ -108,11 +88,6 @@ def find_best_chunk(query: str, index: BM25Index) -> tuple[str | None, float]:
     best_score = float(scores[best_index])
 
     return index.corpus[best_index], best_score
-
-
-# ---------------------------------------------------------------------------
-# Main — interactive loop
-# ---------------------------------------------------------------------------
 
 def main():
     file_path = r"C:\me\2025_2026\NLP\final_project\NLP_final_project\data\jurafsky_chunks\chunks.jsonl"
@@ -154,7 +129,6 @@ def main():
             print("----------------\n")
         else:
             print("No match found.\n")
-
 
 if __name__ == "__main__":
     main()
